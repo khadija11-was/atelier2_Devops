@@ -1,5 +1,5 @@
 <?php
-require_once("../Acces_BD/Professeur.php");
+require_once("../Acce_BD/Professeur.php");
 
 if (isset($_POST['ajouter'])) {
     $code = $_POST['code'];
