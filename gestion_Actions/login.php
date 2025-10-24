@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../Acces_BD/Login.php';
+require_once '../acce_BD/Login.php';
 
 if (isset($_GET['action']) && $_GET['action'] == 'logout') {
     logout();
