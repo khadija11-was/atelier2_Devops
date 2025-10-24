@@ -1,4 +1,4 @@
-[name: PHP CI with MySQL
+name: PHP CI with MySQL
 
 on:
   push:
