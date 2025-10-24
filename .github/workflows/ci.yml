@@ -1,0 +1,142 @@
+[name: PHP CI with MySQL
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  php-mysql-tests:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: gestion_ecole
+        ports: ["3306:3306"]
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: mbstring, mysqli, pdo_mysql
+      
+      - name: Create .env file
+        run: |
+          echo "DB_CONNECTION=mysql" >> .env
+          echo "DB_HOST=127.0.0.1" >> .env
+          echo "DB_PORT=3306" >> .env
+          echo "DB_DATABASE=gestion_ecole" >> .env
+          echo "DB_USERNAME=root" >> .env
+          echo "DB_PASSWORD=root" >> .env
+      
+      - name: Wait for MySQL to be ready
+        run: |
+          while ! mysqladmin ping -h"127.0.0.1" -P3306 -uroot -proot --silent; do
+            sleep 1
+          done
+      
+      - name: Initialize database with schema
+        run: |
+          if [ -f "database/init_db.sql" ]; then
+            echo "Using existing database schema..."
+            mysql -h 127.0.0.1 -P 3306 -u root -proot gestion_ecole < database/init_db.sql
+          else
+            echo "Creating default database schema..."
+            mysql -h 127.0.0.1 -P 3306 -u root -proot gestion_ecole -e "
+              CREATE DATABASE IF NOT EXISTS gestion_ecole;
+              USE gestion_ecole;
+              
+              CREATE TABLE IF NOT EXISTS Etudiant (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                code VARCHAR(50) NOT NULL,
+                nom VARCHAR(100) NOT NULL,
+                prenom VARCHAR(100) NOT NULL,
+                email VARCHAR(150),
+                sexe ENUM('M','F') DEFAULT 'M',
+                filiere VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+              );
+              
+              CREATE TABLE IF NOT EXISTS Prof (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                code VARCHAR(50) NOT NULL,
+                nom VARCHAR(100) NOT NULL,
+                prenom VARCHAR(100) NOT NULL,
+                email VARCHAR(150),
+                langues VARCHAR(255),
+                specialite VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+              );
+              
+              INSERT INTO Etudiant (code, nom, prenom, email, sexe, filiere) VALUES 
+              ('E001','Ahmed','Ali','ahmed.ali@mail.com','M','Informatique'),
+              ('E002','Sara','Ben','sara.ben@mail.com','F','Mathématiques');
+              
+              INSERT INTO Prof (code, nom, prenom, email, langues, specialite) VALUES 
+              ('P001','Driss','Hassan','driss.hassan@mail.com','Français,Anglais','Informatique'),
+              ('P002','Fatima','Zahra','fatima.zahra@mail.com','Anglais,Espagnol','Mathématiques');
+            "
+          fi
+      
+      - name: Run basic PHP syntax check
+        run: |
+          echo "Vérification de la syntaxe PHP..."
+          find . -name "*.php" -exec php -l {} \; || exit 1
+      
+      - name: Test database connection with your connection.php
+        run: |
+          echo "Test de connexion avec votre fichier connection.php..."
+          php -r "
+            require_once 'acce_BD/connection.php';
+            try {
+              \$pdo = Connect();
+              echo '✅ Connexion à la base de données réussie!';
+              
+              // Test de requête simple
+              \$stmt = \$pdo->query('SELECT COUNT(*) as count FROM Etudiant');
+              \$result = \$stmt->fetch();
+              echo ' Nombre d\\'étudiants: ' . \$result['count'];
+              
+              \$stmt = \$pdo->query('SELECT COUNT(*) as count FROM Prof');
+              \$result = \$stmt->fetch();
+              echo ' Nombre de professeurs: ' . \$result['count'];
+              
+            } catch (Exception \$e) {
+              echo '❌ Erreur de connexion: ' . \$e->getMessage();
+              exit(1);
+            }
+          "
+      
+      - name: Verify application structure
+        run: |
+          echo "Vérification de la structure du projet :"
+          ls -la
+          [ -f "index.php" ] && echo "✅ index.php existe" || echo "❌ index.php manquant"
+          [ -d "IHM" ] && echo "✅ Dossier IHM existe" || echo "❌ Dossier IHM manquant"
+          [ -d "acce_BD" ] && echo "✅ Dossier acce_BD existe" || echo "❌ Dossier acce_BD manquant"
+          [ -d "gestion_Actions" ] && echo "✅ Dossier Gestion_Actions existe" || echo "❌ Dossier Gestion_Actions manquant"
+          [ -f "acce_BD/connection.php" ] && echo "✅ connection.php existe" || echo "❌ connection.php manquant"
+          [ -f "IHM/public/acceuil.php" ] && echo "✅ acceuil.php existe" || echo "❌ acceuil.php manquant"
+      
+      - name: Test PHP files inclusion
+        run: |
+          echo "Test d'inclusion des fichiers PHP..."
+          php -r "
+            // Test d'inclusion du fichier de connexion
+            if (file_exists('acce_BD/connection.php')) {
+              require_once 'acce_BD/connection.php';
+              echo '✅ Fichier connection.php inclus avec succès';
+            } else {
+              echo '❌ Fichier connection.php non trouvé';
+              exit(1);
+            }
+          "
