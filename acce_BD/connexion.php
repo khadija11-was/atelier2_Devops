@@ -4,6 +4,7 @@ function Connect() {
     $user = 'root';
     $pass = '';
     $dbname = 'gestion_ecole';
+    $port= 3306;
 
     try {
         $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $user, $pass);
